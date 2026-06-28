@@ -48,6 +48,38 @@ A strong opener has four micro-moves, in ~8 seconds:
 > full-service AI marketing platform offering websites, SEO, Google Ads, social
 > media management, and..." *(click)*
 
+#### What the data says (Gong, 300M+ calls)
+
+| Opener | Success | Note |
+|---|---:|---|
+| **Social proof** — "I've been talking to other [industry] businesses… heard of us?" | **~11.24%** | Highest performer. Peer context reframes vendor→peer. |
+| **Permission/honesty** — "I know I'm catching you out of the blue — can I take 27 seconds?" | **~11.18%** | The oddly-specific number is itself a pattern interrupt. |
+| **Stating a reason** for the call | **~2.1× lift** | "The reason I'm calling is…" beats diving in. |
+| ❌ "How's your day going?" | ~7.6% | Insincere; lumps you with telemarketers. |
+| ❌ **"Did I catch you at a bad time?"** | **~2.15%** | The single worst — lowers status, invites rejection. **Never use it.** |
+
+**Our AI-disclosure advantage:** US law requires we say we're an AI. Rather than
+bury it, we make it the honesty hook — which is one of the *highest-converting*
+styles. "Quick heads up, I'm an AI assistant with [company], and yeah, this is a
+cold call — give me 20 seconds and tell me to get lost if it's not relevant."
+
+#### The built-in opener library
+
+Coldy ships 10 research-backed, honest openers in `voice/openers.py`, each
+compliant by construction (AI + company disclosure baked in, enforced by a test).
+Categories: disarming-honesty, permission, social-proof, reason-led, curiosity
+(one-idea), upfront-qualifier, differentiator, peer-success, bold-value,
+industry-insight. Set `COLDY_OPENER_STYLE` to a specific one or `rotate` to A/B
+at random (seeded per call). Preview them:
+
+```bash
+coldy openers --industry painting
+```
+
+We deliberately **exclude** openers that fake familiarity ("how have you been?",
+"I read your quote", "a mutual connection said…") — for an honest AI cold call
+those are deceptive, and honesty is also what converts.
+
 ### 2. Call structure: the funnel
 
 ```

@@ -54,6 +54,17 @@ class Settings(BaseSettings):
         "an AI marketing platform that builds your website, runs your SEO and "
         "Google Ads, and handles your social media from one dashboard"
     )
+    # Short, spoken outcome used in openers ("...help you {value_prop_short}").
+    value_prop_short: str = "get more booked jobs from your website and Google"
+
+    # --- Opener selection (the first 5-10 seconds) ---
+    # An opener id from voice/openers.py, or "rotate"/"auto" to A-B at random.
+    opener_style: str = "rotate"
+    # The oddly-specific number used in permission openers ("twenty ... seconds").
+    opener_ask_seconds: int = 27
+
+    # --- Voicemail (compliant artificial-voice message when AMD finds a machine) ---
+    voicemail_enabled: bool = False
 
     # --- Compliance ---
     require_written_consent: bool = True

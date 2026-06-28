@@ -79,10 +79,14 @@ YOUR GOAL: {ctx.campaign_goal}
 The win is booking a short discovery call (about fifteen minutes) with a human
 specialist — NOT closing a sale on this call. Be helpful, not pushy.
 
-OPENING (already partly said): you have introduced yourself as an AI assistant
-calling on behalf of {company}. {recording_note}\
-Briefly say why you're calling and ask if it's an okay time. If it's not a good
-time, offer to call back and capture a better time.
+OPENING (ALREADY SPOKEN): your first line already disclosed you're an AI
+assistant with {company}, gave a reason, and asked the person's permission to
+continue. {recording_note}\
+Do NOT re-introduce yourself or repeat the opener. React to how they replied:
+- If they say it's a bad time -> offer a callback and capture a better time.
+- If they're guarded ("who is this / what's this about") -> one warm sentence on
+  the reason, then a single question about how they get jobs today.
+- If they engage -> go straight into discovery (one question), don't pitch yet.
 
 HOW TO SELL {product} (only when they're open to it):
 - Lead with the problem you solve: most service businesses lose jobs because
@@ -117,17 +121,38 @@ ALWAYS:
 """
 
 
-def build_opening_line(ctx: CallContext) -> str:
+def build_opening_line(ctx: CallContext, *, seed: int | None = None) -> str:
     """The first thing the agent says when the human picks up.
 
-    Combines the mandatory AI-identity disclosure with a warm, low-pressure
-    open. Kept deliberately short so the human can jump in.
+    Selected from the research-backed opener library (voice/openers.py). Every
+    opener already includes the legally required AI-identity + company
+    disclosure and ends in a permission question. A recording notice is appended
+    when required. ``seed`` (e.g. the call id) makes the choice deterministic.
     """
-    from ..compliance.disclosure import ai_identity_disclosure, recording_disclosure
+    from ..compliance.disclosure import recording_disclosure
+    from . import openers
 
-    parts = [ai_identity_disclosure()]
+    opener = openers.choose(ctx, seed=seed)
+    line = openers.render(opener, ctx)
     if ctx.requires_recording_notice:
-        parts.append(recording_disclosure())
-    who = f" Is this {ctx.business_name}?" if ctx.business_name else ""
-    parts.append(f"I'll keep this quick — did I catch you at an okay moment?{who}")
-    return " ".join(parts)
+        line = f"{line} {recording_disclosure()}"
+    return line
+
+
+def build_voicemail(ctx: CallContext) -> str:
+    """A short, COMPLIANT artificial-voice voicemail.
+
+    Artificial/prerecorded voice messages must identify the entity and offer an
+    opt-out. We identify the company + AI nature, give the reason, and offer an
+    opt-out. Kept under ~15 seconds. Used only when voicemail is enabled and a
+    machine is detected.
+    """
+    from . import openers
+
+    return (
+        f"Hi, this is {settings.agent_name}, an AI assistant calling for "
+        f"{settings.company_name}. We help {openers.industry_plural(ctx.industry)} "
+        f"{settings.value_prop_short}. No worries if now's not a good time — feel "
+        f"free to call us back at this number, or just let us know if you'd rather "
+        f"not hear from us. Thanks, and take care!"
+    )

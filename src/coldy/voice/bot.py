@@ -135,7 +135,8 @@ async def run_bot(
 
     # --- Conversation context ----------------------------------------------
     system_prompt = build_system_prompt(meta.context)
-    opening = build_opening_line(meta.context)
+    # Seed by call id so each call gets one consistent opener, varied across calls.
+    opening = build_opening_line(meta.context, seed=meta.call_id)
     context = OpenAILLMContext(
         messages=[{"role": "system", "content": system_prompt}],
         tools=tools,

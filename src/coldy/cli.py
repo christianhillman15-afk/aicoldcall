@@ -272,14 +272,29 @@ def check(phone: str = typer.Option(..., "--phone", "-p")) -> None:
 
 @app.command()
 def persona() -> None:
-    """Print the system prompt + opening line the bot will use."""
+    """Print the system prompt + a sample opening line the bot will use."""
     from .voice.persona import CallContext, build_opening_line, build_system_prompt
 
     ctx = CallContext(business_name="Acme Plumbing", industry="plumbing", city="Minneapolis", state="MN")
-    rprint("[bold]OPENING LINE[/bold]")
+    rprint("[bold]SAMPLE OPENING LINE[/bold]")
     rprint(build_opening_line(ctx))
     rprint("\n[bold]SYSTEM PROMPT[/bold]")
     rprint(build_system_prompt(ctx))
+
+
+@app.command()
+def openers(industry: str = typer.Option("painting", "--industry", "-i")) -> None:
+    """Preview the full opener library rendered for a sample lead."""
+    from .voice.openers import OPENERS, render
+    from .voice.persona import CallContext
+
+    ctx = CallContext(industry=industry, city="Minneapolis", state="MN")
+    rprint(f"[bold]Opener library[/bold] (style='{settings.opener_style}', "
+           f"industry='{industry}') — {len(OPENERS)} openers\n")
+    for o in OPENERS:
+        rprint(f"[bold cyan]{o.id}[/bold cyan] [dim]({o.style})[/dim]")
+        rprint(f"  \"{render(o, ctx)}\"")
+        rprint(f"  [dim]{o.note}[/dim]\n")
 
 
 @app.command()
