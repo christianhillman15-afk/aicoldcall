@@ -1,0 +1,5 @@
+# Caddy auto-provisions a Let's Encrypt TLS cert for $DOMAIN and reverse-proxies
+# to the app — including WebSocket upgrades for the Twilio media stream (/media).
+{$COLDY_DOMAIN} {
+	reverse_proxy api:8000
+}

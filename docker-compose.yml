@@ -1,0 +1,41 @@
+# Local stack: the Coldy API/webhook server + Postgres.
+# Point Twilio at a public tunnel (ngrok/cloudflared) -> this service's :8000.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: coldy
+      POSTGRES_PASSWORD: coldy
+      POSTGRES_DB: coldy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: .
+    command: coldy serve
+    env_file: .env
+    environment:
+      COLDY_DATABASE_URL: postgresql+psycopg://coldy:coldy@db:5432/coldy
+      COLDY_HOST: 0.0.0.0
+      COLDY_PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  # The dialer worker runs as its own process so you can scale/stop it
+  # independently of the webhook server. Set CAMPAIGN to your campaign name.
+  dialer:
+    build: .
+    command: sh -c "coldy run --campaign $${CAMPAIGN:-demo}"
+    env_file: .env
+    environment:
+      COLDY_DATABASE_URL: postgresql+psycopg://coldy:coldy@db:5432/coldy
+    depends_on:
+      - db
+      - api
+
+volumes:
+  pgdata:
