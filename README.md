@@ -37,6 +37,16 @@ not raw model IQ. Coldy is engineered around that:
 See [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md) for the full "perfect cold call +
 human-sounding AI" deep-dive.
 
+## Finding prospects
+
+A built-in **prospecting engine** finds the businesses Oxsome can help — via
+official APIs (Google Places, Yelp), scoring each on *needs marketing help* (no
+website, weak reviews) + *can afford it* (affluent ZIP, busy/established) — and
+flags the best to you. It deliberately does **not** scrape Facebook/Nextdoor
+(ToS + privacy + no consent); the compliant "intent" play is an ads → opt-in
+funnel that also makes leads legally callable. Full detail + the hand-off to the
+dialer: [`docs/PROSPECTING.md`](docs/PROSPECTING.md).
+
 ## Architecture at a glance
 
 ```
@@ -94,6 +104,8 @@ See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
 | Command | What it does |
 |---|---|
 | `coldy init` | Create DB tables |
+| `coldy prospect search -l "City, ST" -q painting [--source google\|yelp\|mock]` | Find + score + flag prospects |
+| `coldy prospect list --flagged` / `coldy prospect export -o leads.csv` | Review / export flagged prospects |
 | `coldy import FILE --campaign NAME` | Import leads (normalizes numbers, resolves tz/state) |
 | `coldy consent add --phone … --source …` | Record prior express written consent |
 | `coldy dnc add --phone …` | Suppress a number (internal DNC) |

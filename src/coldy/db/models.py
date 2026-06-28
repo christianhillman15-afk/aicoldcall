@@ -149,6 +149,47 @@ class Call(Base):
     lead: Mapped["Lead"] = relationship(back_populates="calls")
 
 
+class Prospect(Base):
+    """A business discovered by the prospecting engine — a *potential* lead.
+
+    Prospects are sourced from official business directories (Google Places,
+    Yelp) and scored for fit. They are NOT callable leads until consent is
+    captured; promote a prospect to a Lead (via export -> import) only after it
+    has opted in.
+    """
+
+    __tablename__ = "prospects"
+    __table_args__ = (UniqueConstraint("source", "source_id", name="uq_source_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20))          # google | yelp | mock
+    source_id: Mapped[str | None] = mapped_column(String(128))
+
+    business_name: Mapped[str] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(20), index=True)
+    website: Mapped[str | None] = mapped_column(String(500))
+    address: Mapped[str | None] = mapped_column(String(300))
+    city: Mapped[str | None] = mapped_column(String(120))
+    state: Mapped[str | None] = mapped_column(String(2))
+    zip: Mapped[str | None] = mapped_column(String(10))
+    category: Mapped[str | None] = mapped_column(String(120))
+
+    rating: Mapped[float | None] = mapped_column()
+    review_count: Mapped[int | None] = mapped_column(Integer)
+    price_level: Mapped[int | None] = mapped_column(Integer)  # 0-4
+    has_website: Mapped[bool] = mapped_column(Boolean, default=False)
+    area_income: Mapped[int | None] = mapped_column(Integer)  # median HH income for ZIP
+
+    # Scores (0-100) + flag.
+    need_score: Mapped[int] = mapped_column(Integer, default=0)
+    afford_score: Mapped[int] = mapped_column(Integer, default=0)
+    fit_score: Mapped[float] = mapped_column(default=0.0)
+    flagged: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="new")  # new|flagged|exported
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class DNCEntry(Base):
     """Internal (company-specific) do-not-call list.
 

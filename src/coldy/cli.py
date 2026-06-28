@@ -29,9 +29,11 @@ app = typer.Typer(add_completion=False, help="Coldy — human-sounding, complian
 campaign_app = typer.Typer(help="Manage campaigns.")
 consent_app = typer.Typer(help="Manage consent records.")
 dnc_app = typer.Typer(help="Manage the internal do-not-call list.")
+prospect_app = typer.Typer(help="Find & score prospects (lead sourcing).")
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(consent_app, name="consent")
 app.add_typer(dnc_app, name="dnc")
+app.add_typer(prospect_app, name="prospect")
 
 
 @app.command()
@@ -407,6 +409,107 @@ def call(
     sid = TwilioTelephony().place_call(to_number=e164, call_id=call_id, lead_id=lead_id)
     rprint(f"[green]Calling {e164}[/green] — Twilio SID {sid}.")
     rprint("Make sure `coldy serve` is running and reachable at COLDY_PUBLIC_BASE_URL.")
+
+
+@prospect_app.command("search")
+def prospect_search(
+    location: str = typer.Option(..., "--location", "-l", help='e.g. "Minneapolis, MN"'),
+    category: str = typer.Option("service business", "--category", "-q", help="e.g. painting, hvac, plumbing"),
+    source: str = typer.Option("mock", "--source", "-s", help="mock | google | yelp"),
+    limit: int = typer.Option(20, "--limit"),
+    no_income: bool = typer.Option(False, "--no-income", help="Skip Census income enrichment (faster/offline)"),
+) -> None:
+    """Find businesses, score fit (needs help + can afford), and flag the best."""
+    from .db.session import init_db, session_scope
+    from .prospecting import ProspectingPipeline
+
+    init_db()
+    with session_scope() as s:
+        summary = ProspectingPipeline(s).run(
+            source_name=source, query=category, location=location,
+            limit=limit, enrich_income=not no_income,
+        )
+    rprint(f"[green]{summary}[/green]")
+    if summary.flagged_prospects:
+        t = Table("Flagged prospect", "Where", "Fit", "Need", "Afford", "Phone", "Site")
+        for p in summary.flagged_prospects:
+            t.add_row(
+                p["business_name"], f"{p.get('city','')}, {p.get('state','')}",
+                str(p["fit"]), str(p["need"]), str(p["afford"]),
+                p.get("phone") or "-", "yes" if p["has_website"] else "NO",
+            )
+        rprint(t)
+
+
+@prospect_app.command("list")
+def prospect_list(
+    flagged: bool = typer.Option(False, "--flagged", help="Only flagged prospects"),
+    min_fit: float = typer.Option(0, "--min-fit"),
+    limit: int = typer.Option(50, "--limit"),
+) -> None:
+    """List stored prospects, best fit first."""
+    from sqlalchemy import select
+
+    from .db.models import Prospect
+    from .db.session import init_db, session_scope
+
+    init_db()
+    with session_scope() as s:
+        stmt = select(Prospect)
+        if flagged:
+            stmt = stmt.where(Prospect.flagged.is_(True))
+        if min_fit:
+            stmt = stmt.where(Prospect.fit_score >= min_fit)
+        rows = list(s.execute(stmt.order_by(Prospect.fit_score.desc()).limit(limit)).scalars())
+        t = Table("Business", "Where", "Category", "Fit", "Need", "Afford", "Site", "Phone")
+        for p in rows:
+            t.add_row(
+                p.business_name, f"{p.city or ''}, {p.state or ''}", p.category or "",
+                str(p.fit_score), str(p.need_score), str(p.afford_score),
+                "yes" if p.has_website else "NO", p.phone or "-",
+            )
+        rprint(t)
+        rprint(f"[dim]{len(rows)} prospects[/dim]")
+
+
+@prospect_app.command("export")
+def prospect_export(
+    out: str = typer.Option(..., "--out", "-o", help="CSV path"),
+    flagged: bool = typer.Option(True, "--flagged/--all", help="Export flagged only (default) or all"),
+) -> None:
+    """Export prospects to a `coldy import`-compatible CSV.
+
+    NOTE: prospects are NOT consented leads. Capture consent before calling them.
+    """
+    import csv
+
+    from sqlalchemy import select
+
+    from .db.models import Prospect
+    from .db.session import init_db, session_scope
+
+    init_db()
+    n = 0
+    with session_scope() as s:
+        stmt = select(Prospect)
+        if flagged:
+            stmt = stmt.where(Prospect.flagged.is_(True))
+        rows = list(s.execute(stmt.order_by(Prospect.fit_score.desc())).scalars())
+        with open(out, "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(["phone", "business_name", "industry", "city", "state", "notes"])
+            for p in rows:
+                if not p.phone:
+                    continue
+                w.writerow([
+                    p.phone, p.business_name, p.category or "", p.city or "", p.state or "",
+                    f"fit={p.fit_score} need={p.need_score} afford={p.afford_score} "
+                    f"site={'y' if p.has_website else 'n'}",
+                ])
+                p.status = "exported"
+                n += 1
+    rprint(f"[green]Exported {n} prospect(s) -> {out}[/green]")
+    rprint("[yellow]Reminder: capture consent before calling — prospects are not consented leads.[/yellow]")
 
 
 @app.command()

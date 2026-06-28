@@ -93,6 +93,14 @@ class Settings(BaseSettings):
     crm_webhook_url: str = ""
     crm_webhook_secret: str = ""
 
+    # --- Prospecting (lead sourcing) ---
+    # Flag a prospect when it both needs help AND looks able to pay.
+    prospect_min_fit: int = 55
+    prospect_min_afford: int = 45
+    prospect_min_need: int = 25
+    # Where flagged prospects get pushed (Slack-compatible {"text":...} webhook).
+    alert_webhook_url: str = ""
+
     @property
     def from_number_pool(self) -> list[str]:
         """The caller-ID pool to rotate. Falls back to the single from-number."""
