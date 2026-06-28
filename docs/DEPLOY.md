@@ -44,16 +44,27 @@ DigitalOcean → Create → Droplets:
 
 Note the Droplet's public **IPv4**.
 
-## 2. Point your domain at it
+## 2. Get a hostname (you do NOT have to buy a domain)
 
-In your DNS provider, add an **A record**:
+Twilio's media stream needs **valid HTTPS/WSS**, and you can't get a TLS cert for
+a bare IP. But you don't need to buy/configure a domain — pick one:
 
+**Option A — free hostname via sslip.io (simplest, no purchase, no DNS).**
+`sslip.io` auto-resolves `<your-ip>.sslip.io` to your IP. If your Droplet IP is
+`137.184.5.20`, your hostname is `137.184.5.20.sslip.io`. Nothing to register —
+Caddy gets a real Let's Encrypt cert for it. Set in `.env`:
+
+```ini
+COLDY_DOMAIN=137.184.5.20.sslip.io
+COLDY_PUBLIC_BASE_URL=https://137.184.5.20.sslip.io
 ```
-calls.yourdomain.com  →  <droplet IP>
-```
 
-Wait for it to resolve (`dig +short calls.yourdomain.com`). Caddy needs this to
-issue the TLS cert.
+(`nip.io` works the same way if sslip.io ever has issues.) That's the whole
+"domain" step — skip to section 3.
+
+**Option B — your own domain.** In your DNS provider add an **A record**
+`calls.yourdomain.com → <droplet IP>`, wait for it to resolve
+(`dig +short calls.yourdomain.com`), and use it as `COLDY_DOMAIN`.
 
 ## 3. Prepare the Droplet
 
