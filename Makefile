@@ -24,7 +24,8 @@ demo:
 	coldy import data/sample_leads.csv --campaign demo
 	coldy consent add --phone "+16125550142" --source "demo seed (sample only)"
 	coldy campaign start demo
-	coldy run --campaign demo --dry-run
+	coldy plan --campaign demo
+	coldy run --campaign demo --dry-run --once
 	coldy report --campaign demo
 
 serve:

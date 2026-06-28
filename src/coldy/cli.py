@@ -159,6 +159,7 @@ def _set_campaign_status(name: str, status_name: str) -> None:
 def run(
     campaign: str = typer.Option(..., "--campaign", "-c"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Plan + log, but don't place real calls"),
+    once: bool = typer.Option(False, "--once", help="Do a single dialing pass and exit (good for cron)"),
 ) -> None:
     """Run the dialer worker for a campaign (Ctrl-C to stop)."""
     from .db.base import CampaignStatus
@@ -176,10 +177,45 @@ def run(
 
     worker = DialerWorker(campaign, dry_run=dry_run)
     try:
-        asyncio.run(worker.run())
+        asyncio.run(worker.run(once=once))
     except KeyboardInterrupt:
         rprint("\n[yellow]Stopping dialer...[/yellow]")
         worker.stop()
+
+
+@app.command()
+def plan(campaign: str = typer.Option(..., "--campaign", "-c")) -> None:
+    """Preview who would be dialed right now (compliance-gated), placing no calls."""
+    from .db.session import init_db, session_scope
+    from .dialer import CampaignService
+    from .dialer.scheduler import plan_next_dials
+
+    init_db()
+    with session_scope() as s:
+        camp = CampaignService(s).get(campaign)
+        if camp is None:
+            rprint(f"[red]No such campaign:[/red] {campaign}")
+            raise typer.Exit(1)
+        p = plan_next_dials(s, camp.id, free_slots=settings.max_concurrent_calls)
+        rprint(f"[bold]{campaign}[/bold] dial plan now "
+               f"({settings.max_concurrent_calls} slots, window "
+               f"{settings.call_window_start_hour}:00-{settings.call_window_end_hour}:00 local)")
+
+        t = Table("Would dial now", "timezone")
+        for lead in p.to_dial:
+            t.add_row(f"{lead.phone}  {lead.business_name or ''}", lead.timezone or "?")
+        rprint(t if p.to_dial else "[dim]nothing dialable right now[/dim]")
+
+        if p.deferred:
+            t2 = Table("Deferred", "eligible at (UTC)", "why")
+            for lead, until, why in p.deferred:
+                t2.add_row(lead.phone, until.isoformat() if until else "?", why[:50])
+            rprint(t2)
+        if p.blocked:
+            t3 = Table("Blocked", "why")
+            for lead, why in p.blocked:
+                t3.add_row(lead.phone, why[:70])
+            rprint(t3)
 
 
 @app.command()

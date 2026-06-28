@@ -98,7 +98,8 @@ See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
 | `coldy consent add --phone … --source …` | Record prior express written consent |
 | `coldy dnc add --phone …` | Suppress a number (internal DNC) |
 | `coldy campaign create/start/pause NAME` | Manage a campaign |
-| `coldy run --campaign NAME [--dry-run]` | Run the dialer |
+| `coldy run --campaign NAME [--dry-run] [--once]` | Run the dialer (daemon, or one pass with `--once` for cron) |
+| `coldy plan --campaign NAME` | Preview who'd be dialed right now (compliance-gated), no calls |
 | `coldy check --phone …` | Preview the compliance decision for a number |
 | `coldy persona` | Print the exact system prompt + opening the bot uses |
 | `coldy report --campaign NAME` | Campaign stats / outcomes |

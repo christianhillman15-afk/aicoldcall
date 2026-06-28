@@ -49,11 +49,20 @@ class DialerWorker:
     def stop(self) -> None:
         self._stop.set()
 
-    async def run(self, max_idle_ticks: int = 5) -> None:
-        log.info("Dialer starting for campaign '%s' (dry_run=%s)", self.campaign_name, self.dry_run)
+    async def run(self, max_idle_ticks: int = 5, once: bool = False) -> None:
+        log.info(
+            "Dialer starting for campaign '%s' (dry_run=%s, once=%s)",
+            self.campaign_name, self.dry_run, once,
+        )
         idle_ticks = 0
         while not self._stop.is_set():
             placed, in_flight, remaining = await asyncio.to_thread(self._tick)
+            if once:
+                log.info(
+                    "Single pass for '%s': placed=%d in_flight=%d remaining=%d",
+                    self.campaign_name, placed, in_flight, remaining,
+                )
+                break
             if placed == 0 and in_flight == 0 and remaining == 0:
                 idle_ticks += 1
                 if idle_ticks >= max_idle_ticks:
@@ -101,6 +110,9 @@ class DialerWorker:
                 if self.dry_run or self.telephony is None:
                     log.info("[dry-run] would call %s (lead %s, call %s)",
                              lead.phone, lead.id, call.id)
+                    # No real call -> no status callback will complete it, so
+                    # mark it done now to keep the in-flight count accurate.
+                    call.status = CallStatus.COMPLETED
                 else:
                     try:
                         sid = self.telephony.place_call(
@@ -126,8 +138,30 @@ class DialerWorker:
                     lead.status = LeadStatus.EXHAUSTED
                 log.debug("Blocked lead %s (%s)", lead.id, reason)
 
-            remaining = len(repo.dialable(camp.id, limit=1))
-            return (placed, in_flight + placed, remaining)
+            # "Remaining work" = leads compliance would dial now PLUS leads
+            # deferred to a future window/retry (they auto-resolve when time
+            # comes). Hard-blocked leads (no consent, DNC, exhausted) are NOT
+            # remaining work, so an all-blocked campaign finishes instead of
+            # looping forever, while a campaign waiting on the morning window
+            # keeps the daemon alive.
+            now = datetime.now(timezone.utc)
+            active = [LeadStatus.NEW, LeadStatus.QUEUED, LeadStatus.CALLBACK, LeadStatus.FAILED]
+            future_deferred = session.execute(
+                select(func.count())
+                .select_from(Lead)
+                .where(
+                    Lead.campaign_id == camp.id,
+                    Lead.do_not_call.is_(False),
+                    Lead.status.in_(active),
+                    Lead.next_eligible_at.is_not(None),
+                    Lead.next_eligible_at > now,
+                )
+            ).scalar_one()
+            followup = plan_next_dials(
+                session, camp.id, free_slots=max(1, settings.max_concurrent_calls)
+            )
+            remaining = future_deferred + len(followup.to_dial)
+            return (placed, in_flight, remaining)
 
     def _complete_campaign(self) -> None:
         with session_scope() as session:
