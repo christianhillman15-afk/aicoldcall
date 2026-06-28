@@ -70,11 +70,19 @@ The brain is `COLDY_LLM_MODEL`. For a live phone call, the dominant driver of
 "human" is latency, so the default is `claude-haiku-4-5` (fastest). For tougher
 objection handling, switch to `claude-sonnet-4-6`, or `claude-opus-4-8` with
 `COLDY_LLM_FAST_MODE=true` (Opus 4.8 Fast Mode runs the same model ~2.5× faster
-at premium price). `COLDY_LLM_ESCALATION_MODEL` is reserved for a future
-two-tier setup (fast model for normal turns, smarter model for hard turns).
+at premium price). **Two-tier escalation is live**: a `ModelEscalator` processor
+(`voice/bot.py`, driven by `voice/brain.py`) watches each user turn and, on a
+hard turn (objection/pricing/trust — `COLDY_LLM_ESCALATION_MODEL`), pushes an
+`LLMUpdateSettingsFrame` so that turn is answered by the smarter model, then
+drops back to the fast model. Fast by default, smart when it matters.
 
-Prompt caching of the (large, stable) system prompt is the recommended next
-optimization: it cuts both latency and cost across the many calls in a campaign.
+**Inbound calls** are live too: point a Twilio number's Voice webhook at
+`/twilio/inbound`. Coldy matches the caller to a lead (or creates one in an
+"Inbound" campaign), greets them (disclosing AI), and runs the same
+discovery/objection/booking playbook in inbound mode.
+
+Prompt caching of the (large, stable) system prompt is **enabled**: it cuts
+both latency and cost across the many calls in a campaign.
 
 ## Extending it
 

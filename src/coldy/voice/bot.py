@@ -32,8 +32,9 @@ from ..db.models import Call
 from ..db.session import session_scope
 from ..logging import get_logger
 from . import openers
+from .brain import is_hard_turn
 from .humanizer import TURN_TAKING
-from .persona import CallContext, build_system_prompt
+from .persona import CallContext, build_inbound_opening, build_system_prompt
 from .tools import TOOL_SCHEMAS, CallActions
 
 log = get_logger("coldy.voice.bot")
@@ -102,7 +103,14 @@ async def run_bot(
     from pipecat.adapters.schemas.tools_schema import ToolsSchema
     from pipecat.audio.vad.silero import SileroVADAnalyzer
     from pipecat.audio.vad.vad_analyzer import VADParams
-    from pipecat.frames.frames import EndFrame, LLMRunFrame, TTSSpeakFrame
+    from pipecat.frames.frames import (
+        EndFrame,
+        LLMRunFrame,
+        LLMUpdateSettingsFrame,
+        TranscriptionFrame,
+        TTSSpeakFrame,
+    )
+    from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -188,31 +196,80 @@ async def run_bot(
 
     # --- Conversation context ----------------------------------------------
     system_prompt = build_system_prompt(meta.context)
-    # Pick the opener explicitly so we can record which one ran (A/B analytics).
-    # Seeded by call id -> consistent per call, varied across calls.
-    opener = openers.choose(meta.context, seed=meta.call_id)
-    opening = openers.render(opener, meta.context)
-    if meta.context.requires_recording_notice:
-        opening = f"{opening} {recording_disclosure()}"
-    _persist(meta.call_id, opener_id=opener.id)
+    if meta.context.inbound:
+        # The person called us — greet, don't cold-open.
+        opening = build_inbound_opening(meta.context)
+        opener_id = "inbound_greeting"
+    else:
+        # Pick the opener explicitly so we can record which one ran (A/B analytics).
+        # Seeded by call id -> consistent per call, varied across calls.
+        opener = openers.choose(meta.context, seed=meta.call_id)
+        opening = openers.render(opener, meta.context)
+        if meta.context.requires_recording_notice:
+            opening = f"{opening} {recording_disclosure()}"
+        opener_id = opener.id
+    _persist(meta.call_id, opener_id=opener_id)
     context = OpenAILLMContext(
         messages=[{"role": "system", "content": system_prompt}],
         tools=tools,
     )
     aggregator = llm.create_context_aggregator(context)
 
+    # --- Two-tier escalation: switch to the smarter model on hard turns -----
+    # Sits right before the user aggregator; when the final user transcription
+    # looks high-stakes (objection/price/trust), it pushes an LLM settings
+    # update so THIS turn is answered by the escalation model, then drops back
+    # to the fast model on the next easy turn. Best of both: fast by default,
+    # smart when it matters. Degrades to a no-op if the frame API differs.
+    escalator = None
+    if settings.llm_escalation_model and settings.llm_escalation_model != settings.llm_model:
+
+        def _model_update_frame(model_id: str):
+            try:
+                return LLMUpdateSettingsFrame(settings={"model": model_id})
+            except TypeError:
+                try:
+                    from pipecat.frames.frames import LLMSettings
+
+                    return LLMUpdateSettingsFrame(delta=LLMSettings(model=model_id))
+                except Exception:  # noqa: BLE001
+                    return None
+
+        class _ModelEscalator(FrameProcessor):
+            def __init__(self):
+                super().__init__()
+                self._current = settings.llm_model
+
+            async def process_frame(self, frame, direction):
+                await super().process_frame(frame, direction)
+                if isinstance(frame, TranscriptionFrame) and getattr(frame, "text", ""):
+                    target = (
+                        settings.llm_escalation_model
+                        if is_hard_turn(frame.text)
+                        else settings.llm_model
+                    )
+                    if target != self._current:
+                        upd = _model_update_frame(target)
+                        if upd is not None:
+                            self._current = target
+                            await self.push_frame(upd, FrameDirection.DOWNSTREAM)
+                            log.info("Escalation: switched live model -> %s", target)
+                await self.push_frame(frame, direction)
+
+        escalator = _ModelEscalator()
+
     # --- Pipeline ----------------------------------------------------------
-    pipeline = Pipeline(
-        [
-            transport.input(),
-            stt,
-            aggregator.user(),
-            llm,
-            tts,
-            transport.output(),
-            aggregator.assistant(),
-        ]
-    )
+    processors = [transport.input(), stt]
+    if escalator is not None:
+        processors.append(escalator)
+    processors += [
+        aggregator.user(),
+        llm,
+        tts,
+        transport.output(),
+        aggregator.assistant(),
+    ]
+    pipeline = Pipeline(processors)
     task = PipelineTask(
         pipeline,
         params=PipelineParams(

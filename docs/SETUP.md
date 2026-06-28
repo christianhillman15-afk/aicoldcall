@@ -62,8 +62,33 @@ coldy serve          # terminal 1
 ```
 
 You do **not** need to configure anything in the Twilio console for outbound
-calls — Coldy passes the webhook URL on each call programmatically. (You only
-configure a Twilio number's webhook if you also want to receive *inbound* calls.)
+calls — Coldy passes the webhook URL on each call programmatically.
+
+### Hear it end-to-end (one test call)
+
+With `coldy serve` running and `.env` filled in, place a single call to a number
+you own:
+
+```bash
+coldy call --to "+1YOURCELL" --i-own-this-number
+```
+
+`--i-own-this-number` records a self-test consent so the compliance gate passes
+(only valid for numbers you actually control). You'll hear the opener, talk to
+it, and the outcome/transcript will be saved. `coldy doctor` checks your keys
+first.
+
+### Inbound calls (answer + qualify callbacks)
+
+To let Coldy *answer* calls too, point your Twilio number's Voice webhook at:
+
+```
+https://<your COLDY_PUBLIC_BASE_URL>/twilio/inbound   (HTTP POST)
+```
+
+On an inbound call Coldy matches the caller to a lead (or creates one in an
+"Inbound" campaign), greets them warmly (disclosing it's an AI), and runs the
+same discovery/objection/booking playbook — then can transfer to a human.
 
 ## 5. Load leads + consent
 

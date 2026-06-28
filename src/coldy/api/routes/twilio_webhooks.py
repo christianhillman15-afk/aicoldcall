@@ -1,7 +1,9 @@
 """Twilio Programmable Voice webhooks.
 
-  POST /twilio/voice   -> returns <Connect><Stream> TwiML bridging audio to /media
-  POST /twilio/status  -> call lifecycle + AMD (answering-machine) updates
+  POST /twilio/voice    -> returns <Connect><Stream> TwiML bridging audio to /media
+  POST /twilio/inbound  -> inbound calls: register + bridge to the bot
+  POST /twilio/status   -> call lifecycle + AMD (answering-machine) updates
+  POST /twilio/recording-> capture the recording URL
 """
 
 from __future__ import annotations
@@ -13,8 +15,8 @@ from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
 from ...config import settings
-from ...db.base import CallOutcome, CallStatus, LeadStatus
-from ...db.models import Call, Lead
+from ...db.base import CallStatus, CallOutcome, LeadStatus
+from ...db.models import Call, Campaign, Lead
 from ...db.session import session_scope
 from ...logging import get_logger
 from ...telephony.twiml import connect_stream_twiml
@@ -29,6 +31,24 @@ async def voice(request: Request, call_id: int, lead_id: int) -> Response:
     ws_url = f"{settings.websocket_base_url.rstrip('/')}/media"
     twiml = connect_stream_twiml(ws_url, call_id=call_id, lead_id=lead_id)
     log.info("Returning <Connect><Stream> TwiML for call_id=%s", call_id)
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/inbound")
+async def inbound(request: Request) -> Response:
+    """Inbound calls (callbacks). Configure this as your Twilio number's Voice
+    webhook. We register the call, match/create the lead, and bridge to the bot
+    in inbound mode (it greets warmly instead of cold-opening)."""
+    form = await request.form()
+    from_number = form.get("From") or ""
+    to_number = form.get("To") or ""
+    call_sid = form.get("CallSid") or ""
+    call_id, lead_id = await run_in_threadpool(
+        _register_inbound, from_number, to_number, call_sid
+    )
+    ws_url = f"{settings.websocket_base_url.rstrip('/')}/media"
+    twiml = connect_stream_twiml(ws_url, call_id=call_id, lead_id=lead_id, inbound=True)
+    log.info("Inbound call from %s -> call_id=%s lead_id=%s", from_number, call_id, lead_id)
     return Response(content=twiml, media_type="application/xml")
 
 
@@ -132,6 +152,54 @@ def _save_recording_url(call_id: int, url: str) -> None:
         if call is not None:
             call.recording_url = url
             call.recorded = True
+
+
+def _register_inbound(from_number: str, to_number: str, call_sid: str) -> tuple[int, int]:
+    """Match the caller to an existing lead (or create one in the Inbound
+    campaign) and open an inbound Call row. Returns (call_id, lead_id)."""
+    from ...compliance.geo import (
+        is_mobile,
+        normalize_e164,
+        state_for_number,
+        timezone_for_number,
+    )
+
+    e164 = normalize_e164(from_number) or from_number
+    with session_scope() as session:
+        lead = session.execute(select(Lead).where(Lead.phone == e164)).scalars().first()
+        if lead is None:
+            camp = session.execute(
+                select(Campaign).where(Campaign.name == "Inbound")
+            ).scalar_one_or_none()
+            if camp is None:
+                camp = Campaign(
+                    name="Inbound",
+                    goal="Help the caller, answer questions, and book a discovery call or transfer to a human.",
+                )
+                session.add(camp)
+                session.flush()
+            lead = Lead(
+                campaign_id=camp.id,
+                phone=e164,
+                status=LeadStatus.NEW,
+                state=state_for_number(e164),
+                timezone=timezone_for_number(e164),
+                is_mobile=is_mobile(e164),
+            )
+            session.add(lead)
+            session.flush()
+        call = Call(
+            lead_id=lead.id,
+            campaign_id=lead.campaign_id,
+            direction="inbound",
+            provider_call_sid=call_sid,
+            from_number=e164,
+            to_number=to_number,
+            status=CallStatus.IN_PROGRESS,
+        )
+        session.add(call)
+        session.flush()
+        return call.id, lead.id
 
 
 def _apply_status(

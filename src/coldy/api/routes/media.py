@@ -80,10 +80,15 @@ async def media(websocket: WebSocket) -> None:
     params = start_data.get("customParameters", {}) or {}
     call_id = int(params.get("call_id", 0) or 0)
     lead_id = int(params.get("lead_id", 0) or 0)
+    inbound = params.get("inbound") == "1"
 
-    log.info("Media stream start: call_sid=%s call_id=%s lead_id=%s", call_sid, call_id, lead_id)
+    log.info(
+        "Media stream start: call_sid=%s call_id=%s lead_id=%s inbound=%s",
+        call_sid, call_id, lead_id, inbound,
+    )
 
     ctx, _ = _load_context(lead_id)
+    ctx.inbound = inbound
     meta = CallMeta(
         lead_id=lead_id,
         call_id=call_id,

@@ -121,6 +121,7 @@ class Call(Base):
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"))
 
     provider_call_sid: Mapped[str | None] = mapped_column(String(64), index=True)
+    direction: Mapped[str] = mapped_column(String(10), default="outbound")  # outbound|inbound
     from_number: Mapped[str | None] = mapped_column(String(20))
     to_number: Mapped[str] = mapped_column(String(20))
 

@@ -25,6 +25,7 @@ class CallContext:
     state: str | None = None
     campaign_goal: str = "Qualify the business and book a 15-minute discovery call."
     requires_recording_notice: bool = False
+    inbound: bool = False  # True when the person called us (vs. an outbound dial)
 
 
 SPOKEN_STYLE_RULES = """\
@@ -63,6 +64,15 @@ def build_system_prompt(ctx: CallContext) -> str:
     pitch = settings.product_pitch
     playbook = render_playbook()
 
+    mode_note = (
+        "THIS IS AN INBOUND CALL — the person called YOU. You already greeted "
+        "them warmly and disclosed you're an AI. Find out what they need, answer "
+        "their questions, and where it fits, book the discovery call or transfer "
+        "to a human. Don't pitch over them; help first."
+        if ctx.inbound
+        else "THIS IS AN OUTBOUND CALL you placed. Your opener already ran."
+    )
+
     recording_note = (
         "Early in the call, mention the call may be recorded for quality.\n"
         if ctx.requires_recording_notice
@@ -75,6 +85,8 @@ You call small, service-based businesses (painters, contractors, HVAC, plumbers,
 landscapers, cleaners, and the like) to introduce {product} — {pitch}.
 
 {_audience_block(ctx)}
+
+{mode_note}
 
 {SPOKEN_STYLE_RULES}
 
@@ -128,6 +140,19 @@ def build_opening_line(ctx: CallContext, *, seed: int | None = None) -> str:
 
     opener = openers.choose(ctx, seed=seed)
     line = openers.render(opener, ctx)
+    if ctx.requires_recording_notice:
+        line = f"{line} {recording_disclosure()}"
+    return line
+
+
+def build_inbound_opening(ctx: CallContext) -> str:
+    """Greeting for an INBOUND call (the person called us). Warm, discloses AI."""
+    from ..compliance.disclosure import recording_disclosure
+
+    line = (
+        f"Thanks for calling {settings.company_name}! This is {settings.agent_name}, "
+        f"an AI assistant. How can I help you today?"
+    )
     if ctx.requires_recording_notice:
         line = f"{line} {recording_disclosure()}"
     return line

@@ -18,17 +18,20 @@ from twilio.twiml.voice_response import Connect, VoiceResponse
 from ..config import settings
 
 
-def connect_stream_twiml(websocket_url: str, *, call_id: int, lead_id: int) -> str:
+def connect_stream_twiml(
+    websocket_url: str, *, call_id: int, lead_id: int, inbound: bool = False
+) -> str:
     """<Connect><Stream> TwiML that hands call audio to our media-stream socket.
 
     Custom parameters are delivered in the Twilio "start" message so the bot
-    knows which call/lead it is handling.
+    knows which call/lead it is handling and whether the call is inbound.
     """
     response = VoiceResponse()
     connect = Connect()
     stream = connect.stream(url=websocket_url)
     stream.parameter(name="call_id", value=str(call_id))
     stream.parameter(name="lead_id", value=str(lead_id))
+    stream.parameter(name="inbound", value="1" if inbound else "0")
     response.append(connect)
     return str(response)
 

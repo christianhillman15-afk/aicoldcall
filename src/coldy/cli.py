@@ -315,6 +315,101 @@ def openers(industry: str = typer.Option("painting", "--industry", "-i")) -> Non
 
 
 @app.command()
+def call(
+    to: str = typer.Option(..., "--to", help="Number to call in E.164 (use a number you OWN to test)"),
+    campaign: str = typer.Option("_test", "--campaign", "-c"),
+    i_own_this_number: bool = typer.Option(
+        False,
+        "--i-own-this-number",
+        help="Record a self-test consent so compliance passes (ONLY for numbers you own/control)",
+    ),
+) -> None:
+    """Place ONE real outbound call to hear the bot end-to-end.
+
+    Requires `coldy serve` running, COLDY_PUBLIC_BASE_URL reachable by Twilio, and
+    Anthropic/Deepgram/Cartesia/Twilio keys. This places a REAL call (costs money).
+    """
+    import os
+
+    from sqlalchemy import select
+
+    from .compliance import ComplianceEngine
+    from .compliance.geo import is_mobile, normalize_e164, state_for_number, timezone_for_number
+    from .db.base import CallStatus, ConsentType, LeadStatus
+    from .db.models import Call, ConsentRecord, Lead
+    from .db.session import init_db, session_scope
+    from .dialer import CampaignService
+
+    init_db()
+    e164 = normalize_e164(to)
+    if not e164:
+        rprint(f"[red]Invalid number:[/red] {to}")
+        raise typer.Exit(1)
+
+    # Pre-flight: fail fast if anything needed for a live call is missing.
+    missing = [
+        k for k in (
+            "ANTHROPIC_API_KEY", "DEEPGRAM_API_KEY", "CARTESIA_API_KEY",
+            "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+        ) if not os.getenv(k)
+    ]
+    if missing:
+        rprint(f"[red]Missing keys:[/red] {', '.join(missing)} (set them in .env)")
+        raise typer.Exit(1)
+    if not settings.twilio_from_number:
+        rprint("[red]COLDY_TWILIO_FROM_NUMBER is not set.[/red]")
+        raise typer.Exit(1)
+    if not settings.public_base_url.startswith("http"):
+        rprint("[red]COLDY_PUBLIC_BASE_URL is not set[/red] — Twilio must reach your server.")
+        raise typer.Exit(1)
+
+    with session_scope() as s:
+        svc = CampaignService(s)
+        camp = svc.get(campaign) or svc.create(campaign, "End-to-end test call.")
+        lead = s.execute(
+            select(Lead).where(Lead.phone == e164, Lead.campaign_id == camp.id)
+        ).scalars().first()
+        if lead is None:
+            lead = Lead(
+                campaign_id=camp.id, phone=e164, status=LeadStatus.NEW,
+                state=state_for_number(e164), timezone=timezone_for_number(e164),
+                is_mobile=is_mobile(e164),
+            )
+            s.add(lead)
+            s.flush()
+        if i_own_this_number:
+            rprint("[yellow]Recording a self-test consent — only valid for numbers you own.[/yellow]")
+            s.add(ConsentRecord(
+                lead_id=lead.id, consent_type=ConsentType.EXPRESS_WRITTEN,
+                source="self-test (--i-own-this-number)",
+            ))
+            s.flush()
+            s.refresh(lead)
+
+        decision = ComplianceEngine(s).evaluate(lead)
+        if not decision.allowed:
+            rprint(f"[red]Blocked by compliance:[/red] {'; '.join(decision.reasons)}")
+            rprint("[yellow]Self-test? re-run with --i-own-this-number (numbers you own only).[/yellow]")
+            raise typer.Exit(1)
+
+        call_row = Call(
+            lead_id=lead.id, campaign_id=camp.id, to_number=e164,
+            from_number=settings.twilio_from_number, status=CallStatus.INITIATED,
+        )
+        s.add(call_row)
+        s.flush()
+        lead.status = LeadStatus.CALLING
+        lead.attempts += 1
+        call_id, lead_id = call_row.id, lead.id
+
+    from .telephony import TwilioTelephony
+
+    sid = TwilioTelephony().place_call(to_number=e164, call_id=call_id, lead_id=lead_id)
+    rprint(f"[green]Calling {e164}[/green] — Twilio SID {sid}.")
+    rprint("Make sure `coldy serve` is running and reachable at COLDY_PUBLIC_BASE_URL.")
+
+
+@app.command()
 def serve() -> None:
     """Run the FastAPI webhook/media server."""
     import uvicorn

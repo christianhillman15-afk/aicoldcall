@@ -99,6 +99,7 @@ See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
 | `coldy dnc add --phone …` | Suppress a number (internal DNC) |
 | `coldy campaign create/start/pause NAME` | Manage a campaign |
 | `coldy run --campaign NAME [--dry-run] [--once]` | Run the dialer (daemon, or one pass with `--once` for cron) |
+| `coldy call --to +1… [--i-own-this-number]` | Place ONE real test call to hear the bot end-to-end |
 | `coldy plan --campaign NAME` | Preview who'd be dialed right now (compliance-gated), no calls |
 | `coldy check --phone …` | Preview the compliance decision for a number |
 | `coldy persona` | Print the exact system prompt + a sample opening the bot uses |
