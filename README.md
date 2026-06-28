@@ -47,6 +47,19 @@ flags the best to you. It deliberately does **not** scrape Facebook/Nextdoor
 funnel that also makes leads legally callable. Full detail + the hand-off to the
 dialer: [`docs/PROSPECTING.md`](docs/PROSPECTING.md).
 
+## Filling your call list legally (the opt-in funnel)
+
+`coldy serve` hosts a **consent-capture landing page** at **`/optin`** — a blank
+form (no numbers on it; each visitor enters their own). On submit it records
+**prior express written consent** with evidence (exact wording shown, timestamp,
+IP, user agent) and drops a **callable lead** into the opt-in campaign, already
+eligible to dial. There's also a JSON intake at **`POST /api/optin`** for
+integrations (Zapier/Make, Facebook Lead Ads via a connector).
+
+This is the legal way to "find people who want help": run ads → `/optin` →
+consented leads → the dialer can call them. Prospecting finds *who*; the opt-in
+makes them *callable*.
+
 ## Architecture at a glance
 
 ```

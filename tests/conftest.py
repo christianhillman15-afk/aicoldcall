@@ -1,12 +1,28 @@
-"""Shared fixtures: an isolated in-memory database per test."""
+"""Shared fixtures: an isolated database for tests.
+
+Unit tests use the per-test in-memory `session` fixture. Integration tests that
+exercise the FastAPI app (which uses the global engine) get an isolated temp
+DB — set here BEFORE any coldy module imports so settings pick it up.
+"""
 
 from __future__ import annotations
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import os
+import pathlib
+import tempfile
 
-from coldy.db.base import Base
+_TESTDB = pathlib.Path(tempfile.gettempdir()) / "coldy_pytest.db"
+os.environ["COLDY_DATABASE_URL"] = f"sqlite:///{_TESTDB}"
+try:
+    _TESTDB.unlink()
+except FileNotFoundError:
+    pass
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+from coldy.db.base import Base  # noqa: E402
 
 
 @pytest.fixture()

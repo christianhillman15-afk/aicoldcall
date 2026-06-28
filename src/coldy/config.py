@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     # Where flagged prospects get pushed (Slack-compatible {"text":...} webhook).
     alert_webhook_url: str = ""
 
+    # --- Opt-in landing page ---
+    # Campaign that web opt-ins drop into (created if missing).
+    optin_campaign: str = "Web Opt-ins"
+
     @property
     def from_number_pool(self) -> list[str]:
         """The caller-ID pool to rotate. Falls back to the single from-number."""

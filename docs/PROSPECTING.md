@@ -65,6 +65,22 @@ raise their hand** — which also makes them legally callable.
 This inbound funnel is the "bot that flags people and sends them to you" — done
 the way that doesn't get you banned or sued, and that makes every lead callable.
 
+**This is now built in.** `coldy serve` hosts the landing page at **`/optin`**
+and a JSON intake at **`POST /api/optin`**:
+
+- Point your Facebook/Instagram/Nextdoor **ads** at
+  `https://<your-domain>/optin?src=fb_painters` (the `src` is stored for
+  attribution).
+- Each submission records **prior express written consent** with evidence (the
+  exact consent text shown, timestamp, IP, user agent) and creates a **callable
+  lead** in the `Web Opt-ins` campaign, eligible to dial immediately.
+- **Facebook Lead Ads / Zapier / Make:** map the lead fields to a JSON POST to
+  `/api/optin` (`phone`, `consent: true`, `contact_name`, `business_name`,
+  `industry`, `src`). Same result.
+- You get pinged on each opt-in via `COLDY_ALERT_WEBHOOK_URL`.
+
+So the loop is fully closed: **ad → /optin (consent) → dialer calls them.**
+
 ## The hand-off to the dialer
 
 ```

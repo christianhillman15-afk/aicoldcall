@@ -105,6 +105,10 @@ class ConsentRecord(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
     evidence_url: Mapped[str | None] = mapped_column(String(500))
+    # TCPA evidence: keep proof of exactly what they agreed to, and from where.
+    consent_text: Mapped[str | None] = mapped_column(Text)
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(String(400))
 
     lead: Mapped["Lead"] = relationship(back_populates="consents")
 
