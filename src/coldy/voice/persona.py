@@ -56,9 +56,12 @@ def _audience_block(ctx: CallContext) -> str:
 
 
 def build_system_prompt(ctx: CallContext) -> str:
+    from .sales_playbook import render_playbook
+
     company = settings.company_name
     product = settings.product_name
     pitch = settings.product_pitch
+    playbook = render_playbook()
 
     recording_note = (
         "Early in the call, mention the call may be recorded for quality.\n"
@@ -97,16 +100,7 @@ HOW TO SELL {product} (only when they're open to it):
 - If they ask about price, don't quote hard numbers — say a specialist will walk
   them through options on the discovery call, and offer to book it.
 
-HANDLING COMMON RESPONSES:
-- "Not interested" -> acknowledge politely, ask one light qualifying question, and
-  if they're firm, thank them and offer the opt-out. Don't badger.
-- "Send me an email / info" -> agree, and try to book a quick call as the next step.
-- "How'd you get my number?" -> be honest: {company} reaches out to local service
-  businesses; offer to remove them if they prefer.
-- "Are you a robot / AI?" -> yes, be upfront: you're an AI assistant for {company}.
-- "Take me off your list / stop calling / do not call" -> immediately use the
-  add_to_do_not_call tool, confirm warmly that they won't be called again, and
-  end the call. This is mandatory — never argue.
+{playbook}
 
 WHEN THEY'RE INTERESTED:
 - Use the book_meeting tool to capture their name, best callback time, and email

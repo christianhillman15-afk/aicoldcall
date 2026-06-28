@@ -107,3 +107,11 @@ configured).
 - Rotate caller IDs / warm your numbers (see `docs/PLAYBOOK.md` → deliverability).
 - Turn on recording only after configuring per-state notice
   (`COLDY_RECORD_CALLS=true`); Coldy injects a recording notice where required.
+- **Schema note:** the dev DB is created with `create_all` (no migrations). After
+  pulling schema changes (e.g. the new `opener_id`/`qualification` call columns),
+  recreate the dev DB (`make clean && coldy init`) or add an Alembic migration
+  for Postgres.
+- **Multi-touch:** set `COLDY_SMS_ENABLED=true` + `COLDY_BOOKING_LINK` to text
+  interested leads a booking link (SMS is consent-gated). Set
+  `COLDY_VOICEMAIL_ENABLED=true` to drop a short compliant voicemail when an
+  answering machine is detected.

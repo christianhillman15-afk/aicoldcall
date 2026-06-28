@@ -87,6 +87,26 @@ TOOL_SCHEMAS = [
         },
     },
     {
+        "name": "record_qualification",
+        "description": (
+            "Record what you learned about the business: their need, whether "
+            "they're the decision-maker, timing, and fit, plus an interest score "
+            "1 (cold) to 5 (hot). Call this once you've learned enough — it helps "
+            "the team prioritize. Does not end the call."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "need": {"type": "string", "description": "Their pain / lead-flow situation"},
+                "decision_maker": {"type": "boolean", "description": "Are they the owner/decision-maker?"},
+                "timing": {"type": "string", "description": "Busy season / how soon they want results"},
+                "fit": {"type": "string", "description": "How well our offer fits them"},
+                "interest_score": {"type": "integer", "description": "1 (cold) to 5 (hot)"},
+            },
+            "required": ["interest_score"],
+        },
+    },
+    {
         "name": "end_call",
         "description": (
             "End the call. ALWAYS call this when the conversation is over, with a "
@@ -196,6 +216,29 @@ class CallActions:
         self.final_outcome = CallOutcome.CALLBACK
         log.info("Callback scheduled for lead %s (%s)", self.lead_id, when)
         return f"Got it — confirm you'll call back {when}, then wrap up."
+
+    def record_qualification(
+        self,
+        interest_score: int,
+        need: str = "",
+        decision_maker: bool | None = None,
+        timing: str = "",
+        fit: str = "",
+    ) -> str:
+        score = max(1, min(5, int(interest_score)))
+        notes = (
+            f"need={need or 'n/a'}; decision_maker={decision_maker}; "
+            f"timing={timing or 'n/a'}; fit={fit or 'n/a'}"
+        )
+        with session_scope() as s:
+            from ..db.models import Call
+
+            call = s.get(Call, self.call_id)
+            if call:
+                call.interest_score = score
+                call.qualification = notes
+        log.info("Qualification for call %s: score=%s (%s)", self.call_id, score, notes)
+        return "Noted — keep the conversation going naturally."
 
     def end_call(self, outcome: str = "unknown", summary: str = "") -> str:
         try:

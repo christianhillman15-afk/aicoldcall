@@ -111,12 +111,21 @@ See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
 
 Everything is env-driven (`COLDY_*` prefix). The most important knobs:
 
-- `COLDY_LLM_MODEL` — the conversational brain. Phone latency favors a fast
-  model: `claude-haiku-4-5` (default), `claude-sonnet-4-6`, or `claude-opus-4-8`
-  (smartest; set `COLDY_LLM_FAST_MODE=true`).
+- `COLDY_LLM_MODEL` — the conversational brain (fast model for the turn loop).
+  `claude-haiku-4-5` (default), `claude-sonnet-4-6`, or `claude-opus-4-8`.
+  `COLDY_LLM_ESCALATION_MODEL` is used for hard turns (objections/pricing — see
+  `voice/brain.py`). The system prompt is **prompt-cached** across the campaign
+  for lower latency + cost.
+- `COLDY_OPENER_STYLE` — `rotate` (A/B) or a specific opener id (`coldy openers`).
 - `COLDY_REQUIRE_WRITTEN_CONSENT` — **keep `true`** unless counsel says otherwise.
 - `COLDY_CALL_WINDOW_START_HOUR` / `_END_HOUR` — local calling window (default 9–20).
 - `COLDY_MAX_CONCURRENT_CALLS`, `COLDY_DIAL_INTERVAL_SECONDS` — pacing.
+- `COLDY_VOICEMAIL_ENABLED`, `COLDY_SMS_ENABLED`, `COLDY_BOOKING_LINK` —
+  multi-touch follow-up (voicemail drop on machine detection; consent-gated SMS).
+- `COLDY_RECORD_CALLS` — enable recording (per-state notice auto-injected).
+
+`coldy report` shows the **funnel** (dials → connected → conversations →
+meetings) and a **per-opener A/B table** so you can see which opener books most.
 
 Full list in `.env.example`.
 

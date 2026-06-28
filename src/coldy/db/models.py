@@ -140,6 +140,11 @@ class Call(Base):
     transcript: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
 
+    # Analytics: which opener was used (for A/B), and the qualification read.
+    opener_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    interest_score: Mapped[int | None] = mapped_column(Integer)  # 1 (cold) - 5 (hot)
+    qualification: Mapped[str | None] = mapped_column(Text)      # need/authority/timing/fit notes
+
     lead: Mapped["Lead"] = relationship(back_populates="calls")
 
 

@@ -33,6 +33,15 @@ def connect_stream_twiml(websocket_url: str, *, call_id: int, lead_id: int) -> s
     return str(response)
 
 
+def voicemail_twiml(message: str) -> str:
+    """Speak a short compliant voicemail, then hang up. Used when AMD detects a
+    machine and voicemail is enabled."""
+    response = VoiceResponse()
+    response.say(message)
+    response.hangup()
+    return str(response)
+
+
 def dial_human_twiml(to_number: str | None = None) -> str:
     """TwiML to warm-transfer the live call to a human specialist."""
     to = to_number or settings.transfer_number

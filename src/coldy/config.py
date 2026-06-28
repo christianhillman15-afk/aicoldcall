@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # --- Voicemail (compliant artificial-voice message when AMD finds a machine) ---
     voicemail_enabled: bool = False
 
+    # --- SMS follow-up (TCPA: texting also requires consent — gated on it) ---
+    sms_enabled: bool = False
+    booking_link: str = ""  # sent to interested leads, e.g. a Calendly URL
+
     # --- Compliance ---
     require_written_consent: bool = True
     call_window_start_hour: int = 9

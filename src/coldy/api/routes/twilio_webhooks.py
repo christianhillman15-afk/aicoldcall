@@ -51,22 +51,87 @@ async def status(request: Request, call_id: int) -> Response:
     twilio_status = (form.get("CallStatus") or "").lower()
     answered_by = (form.get("AnsweredBy") or "").lower()  # AMD result, if any
     duration = form.get("CallDuration")
+    call_sid = form.get("CallSid") or ""
     call_status = _STATUS_MAP.get(twilio_status, CallStatus.IN_PROGRESS)
     is_machine = answered_by.startswith("machine")
+
+    # Machine detected -> leave a short compliant voicemail (if enabled) by
+    # redirecting the still-live call before it pitches an answering machine.
+    if is_machine and settings.voicemail_enabled and call_sid:
+        vm_text = await run_in_threadpool(_voicemail_text, call_id)
+        if vm_text:
+            await run_in_threadpool(_telephony().leave_voicemail, call_sid, vm_text)
 
     payload = await run_in_threadpool(
         _apply_status, call_id, call_status, is_machine, duration
     )
 
-    # Push terminal outcomes to the CRM (best effort, off the request path).
     if payload is not None:
+        # Push the outcome to the CRM (best effort, off the request path).
         from ...crm import CallOutcomePayload, get_default_sink
 
         sink = get_default_sink()
         if sink.enabled:
             await run_in_threadpool(sink.send, CallOutcomePayload(**payload))
 
+        # Multi-touch SMS follow-up (consent-gated inside _send_followup).
+        if settings.sms_enabled:
+            await run_in_threadpool(_send_followup, call_id)
+
     return Response(status_code=204)
+
+
+@router.post("/recording")
+async def recording(request: Request, call_id: int) -> Response:
+    """Capture the recording URL once Twilio finishes recording the call."""
+    form = await request.form()
+    url = form.get("RecordingUrl")
+    if url:
+        await run_in_threadpool(_save_recording_url, call_id, url)
+    return Response(status_code=204)
+
+
+# --- helpers (run in threadpool) ---------------------------------------------
+
+_telephony_singleton = None
+
+
+def _telephony():
+    global _telephony_singleton
+    if _telephony_singleton is None:
+        from ...telephony import TwilioTelephony
+
+        _telephony_singleton = TwilioTelephony()
+    return _telephony_singleton
+
+
+def _voicemail_text(call_id: int) -> str | None:
+    from ...voice.persona import CallContext, build_voicemail
+
+    with session_scope() as session:
+        call = session.get(Call, call_id)
+        if call is None:
+            return None
+        lead = session.get(Lead, call.lead_id)
+        ctx = CallContext(industry=lead.industry if lead else None)
+        return build_voicemail(ctx)
+
+
+def _send_followup(call_id: int) -> None:
+    from ...followup import send_followup
+
+    with session_scope() as session:
+        call = session.get(Call, call_id)
+        if call is not None:
+            send_followup(_telephony(), session, call)
+
+
+def _save_recording_url(call_id: int, url: str) -> None:
+    with session_scope() as session:
+        call = session.get(Call, call_id)
+        if call is not None:
+            call.recording_url = url
+            call.recorded = True
 
 
 def _apply_status(

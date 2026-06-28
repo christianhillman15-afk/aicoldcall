@@ -242,6 +242,23 @@ def report(campaign: str = typer.Option(..., "--campaign", "-c")) -> None:
         t2.add_row(k, str(v))
     rprint(t2)
 
+    f = data.get("funnel", {})
+    if f:
+        rprint(
+            f"\n[bold]Funnel[/bold]: {f['dials']} dials → {f['connected']} connected "
+            f"([cyan]{f['connect_rate_pct']}%[/cyan]) → {f['conversations']} conversations "
+            f"([cyan]{f['conversation_rate_pct']}%[/cyan]) → {f['meetings']} meetings "
+            f"([green]{f['meeting_rate_pct']}%[/green])"
+        )
+    by_opener = data.get("by_opener", {})
+    if by_opener:
+        t3 = Table("Opener (best first)", "Calls", "Meetings", "Meeting %")
+        for oid, d in sorted(
+            by_opener.items(), key=lambda kv: kv[1]["meeting_rate_pct"], reverse=True
+        ):
+            t3.add_row(oid, str(d["calls"]), str(d["meetings"]), f"{d['meeting_rate_pct']}%")
+        rprint(t3)
+
 
 @app.command()
 def check(phone: str = typer.Option(..., "--phone", "-p")) -> None:

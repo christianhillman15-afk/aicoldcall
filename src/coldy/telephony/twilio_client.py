@@ -37,7 +37,7 @@ class TwilioTelephony:
         voice_url = f"{base}/twilio/voice?call_id={call_id}&lead_id={lead_id}"
         status_url = f"{base}/twilio/status?call_id={call_id}"
 
-        call = self._client.calls.create(
+        kwargs = dict(
             to=to_number,
             from_=settings.twilio_from_number,
             url=voice_url,
@@ -46,13 +46,43 @@ class TwilioTelephony:
             status_callback_event=["initiated", "ringing", "answered", "completed"],
             status_callback_method="POST",
             # Answering-machine detection: Twilio reports AnsweredBy on the
-            # status callback so the dialer can mark voicemails.
+            # status callback so the dialer can mark/handle voicemails.
             machine_detection="Enable",
             # Don't let a call ring forever.
             timeout=30,
         )
+        if settings.record_calls:
+            # Recording posture is enforced separately (per-state notice via the
+            # compliance engine); only record when explicitly enabled.
+            kwargs["record"] = True
+            kwargs["recording_status_callback"] = f"{base}/twilio/recording?call_id={call_id}"
+            kwargs["recording_status_callback_method"] = "POST"
+
+        call = self._client.calls.create(**kwargs)
         log.info("Placed call %s -> %s (call_id=%s)", call.sid, to_number, call_id)
         return call.sid
+
+    def leave_voicemail(self, call_sid: str, message: str) -> None:
+        """Redirect a live (machine-answered) call to a short voicemail message."""
+        from .twiml import voicemail_twiml
+
+        try:
+            self._client.calls(call_sid).update(twiml=voicemail_twiml(message))
+            log.info("Left voicemail on call %s", call_sid)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Voicemail failed for %s: %s", call_sid, e)
+
+    def send_sms(self, to_number: str, body: str) -> str | None:
+        """Send an SMS follow-up. Returns the message SID, or None on failure."""
+        try:
+            msg = self._client.messages.create(
+                to=to_number, from_=settings.twilio_from_number, body=body
+            )
+            log.info("Sent SMS %s -> %s", msg.sid, to_number)
+            return msg.sid
+        except Exception as e:  # noqa: BLE001
+            log.warning("SMS failed to %s: %s", to_number, e)
+            return None
 
     def redirect_to_human(self, call_sid: str, to_number: str | None = None) -> None:
         """Warm-transfer a live call by updating it with <Dial> TwiML."""

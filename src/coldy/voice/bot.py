@@ -26,13 +26,53 @@ import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from ..compliance.disclosure import recording_disclosure
 from ..config import settings
+from ..db.models import Call
+from ..db.session import session_scope
 from ..logging import get_logger
+from . import openers
 from .humanizer import TURN_TAKING
-from .persona import CallContext, build_opening_line, build_system_prompt
+from .persona import CallContext, build_system_prompt
 from .tools import TOOL_SCHEMAS, CallActions
 
 log = get_logger("coldy.voice.bot")
+
+
+def _persist(call_id: int, **fields) -> None:
+    """Best-effort write of a few fields onto the Call row."""
+    if not call_id:
+        return
+    try:
+        with session_scope() as s:
+            call = s.get(Call, call_id)
+            if call:
+                for k, v in fields.items():
+                    setattr(call, k, v)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Could not persist call %s fields: %s", call_id, e)
+
+
+def _transcript_from_context(context) -> str:
+    """Flatten the conversation context into a readable transcript."""
+    try:
+        messages = context.get_messages()
+    except Exception:  # noqa: BLE001
+        messages = getattr(context, "messages", []) or []
+    lines: list[str] = []
+    for m in messages:
+        role = m.get("role") if isinstance(m, dict) else getattr(m, "role", "")
+        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
+        if role == "system":
+            continue
+        if isinstance(content, list):
+            content = " ".join(
+                part.get("text", "") for part in content if isinstance(part, dict)
+            )
+        if content:
+            speaker = {"assistant": "AI", "user": "Lead"}.get(role, str(role))
+            lines.append(f"{speaker}: {content}")
+    return "\n".join(lines)
 
 
 @dataclass
@@ -105,10 +145,23 @@ async def run_bot(
     tts = CartesiaTTSService(
         api_key=os.getenv("CARTESIA_API_KEY", ""), voice_id=settings.tts_voice_id
     )
+    # "Smarter + faster": prompt-cache the large, stable system prompt so it's
+    # near-free and low-latency across every call in the campaign, and keep
+    # max_tokens small (spoken turns are short -> caps worst-case latency). The
+    # model is configurable (fast model by default); voice/brain.py holds the
+    # two-tier escalation classifier for switching to the smarter model on hard
+    # turns.
+    try:
+        llm_params = AnthropicLLMService.InputParams(
+            max_tokens=settings.llm_max_tokens,
+            enable_prompt_caching=True,
+        )
+    except (AttributeError, TypeError):  # InputParams shape varies across versions
+        llm_params = None
     llm = AnthropicLLMService(
         api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         model=settings.llm_model,
-        max_tokens=settings.llm_max_tokens,
+        params=llm_params,
     )
 
     # --- Tools (in-call actions) -------------------------------------------
@@ -135,8 +188,13 @@ async def run_bot(
 
     # --- Conversation context ----------------------------------------------
     system_prompt = build_system_prompt(meta.context)
-    # Seed by call id so each call gets one consistent opener, varied across calls.
-    opening = build_opening_line(meta.context, seed=meta.call_id)
+    # Pick the opener explicitly so we can record which one ran (A/B analytics).
+    # Seeded by call id -> consistent per call, varied across calls.
+    opener = openers.choose(meta.context, seed=meta.call_id)
+    opening = openers.render(opener, meta.context)
+    if meta.context.requires_recording_notice:
+        opening = f"{opening} {recording_disclosure()}"
+    _persist(meta.call_id, opener_id=opener.id)
     context = OpenAILLMContext(
         messages=[{"role": "system", "content": system_prompt}],
         tools=tools,
@@ -193,5 +251,12 @@ async def run_bot(
             await task.queue_frames([EndFrame()])
 
     runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+    try:
+        await runner.run(task)
+    finally:
+        _persist(
+            meta.call_id,
+            transcript=_transcript_from_context(context),
+            recorded=settings.record_calls,
+        )
     log.info("Call %s pipeline finished (outcome=%s)", meta.call_id, actions.final_outcome.value)
