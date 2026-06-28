@@ -69,6 +69,12 @@ def _load_context(lead_id: int) -> tuple[CallContext, str | None]:
 @router.websocket("/media")
 async def media(websocket: WebSocket) -> None:
     await websocket.accept()
+    from ..security import media_token_ok
+
+    if not media_token_ok(websocket.query_params.get("token")):
+        log.warning("Media stream rejected: bad/missing token")
+        await websocket.close(code=1008)
+        return
     start = await _read_start(websocket)
     if start is None:
         log.warning("Media socket closed before 'start'")

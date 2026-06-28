@@ -105,6 +105,14 @@ class Settings(BaseSettings):
     # Campaign that web opt-ins drop into (created if missing).
     optin_campaign: str = "Web Opt-ins"
 
+    # --- Production security ---
+    domain: str = ""                       # your public hostname (for Caddy/TLS)
+    twilio_validate_signatures: bool = True # verify X-Twilio-Signature on webhooks
+    dashboard_user: str = ""               # HTTP Basic auth for /dashboard (+ APIs)
+    dashboard_password: str = ""
+    optin_api_token: str = ""              # require X-Coldy-Token on POST /api/optin
+    media_token: str = ""                  # token in the media-stream URL
+
     @property
     def from_number_pool(self) -> list[str]:
         """The caller-ID pool to rotate. Falls back to the single from-number."""

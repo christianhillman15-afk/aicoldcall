@@ -26,6 +26,9 @@ def connect_stream_twiml(
     Custom parameters are delivered in the Twilio "start" message so the bot
     knows which call/lead it is handling and whether the call is inbound.
     """
+    if settings.media_token:
+        sep = "&" if "?" in websocket_url else "?"
+        websocket_url = f"{websocket_url}{sep}token={settings.media_token}"
     response = VoiceResponse()
     connect = Connect()
     stream = connect.stream(url=websocket_url)

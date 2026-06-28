@@ -14,9 +14,11 @@ the lead into the opt-in campaign already eligible to dial.
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+
+from ..security import verify_optin_token
 
 from ...compliance.geo import is_mobile, normalize_e164, state_for_number, timezone_for_number
 from ...config import settings
@@ -138,7 +140,9 @@ class OptinPayload(BaseModel):
 
 
 @router.post("/api/optin")
-def api_optin(payload: OptinPayload, request: Request) -> JSONResponse:
+def api_optin(
+    payload: OptinPayload, request: Request, _: None = Depends(verify_optin_token)
+) -> JSONResponse:
     ok, message, lead_id = record_optin(
         phone=payload.phone,
         consent=payload.consent,

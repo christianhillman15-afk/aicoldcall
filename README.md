@@ -110,7 +110,14 @@ reporting end-to-end without a Twilio account.
    coldy report -c june_painters
    ```
 
-See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
+See [`docs/SETUP.md`](docs/SETUP.md) for local setup, and
+**[`docs/DEPLOY.md`](docs/DEPLOY.md)** for the full **DigitalOcean** production
+runbook (Droplet + Docker Compose + Caddy auto-HTTPS, Twilio config, go-live
+checklist).
+
+Production security is built in (set these in `.env`): Twilio webhook signature
+validation, HTTP Basic auth on the dashboard, a token on the media-stream URL,
+and an optional token on the opt-in API.
 
 ## CLI
 
