@@ -37,6 +37,9 @@ class DialerWorker:
         self.campaign_name = campaign_name
         self.dry_run = dry_run
         self._stop = asyncio.Event()
+        from ..telephony.number_pool import NumberPool
+
+        self.pool = NumberPool()  # local-presence caller-ID selection
         if telephony is not None:
             self.telephony = telephony
         elif dry_run:
@@ -96,11 +99,13 @@ class DialerWorker:
             repo = LeadRepository(session)
             placed = 0
             for lead in plan.to_dial:
+                # Local-presence caller ID: pick the best from-number for this lead.
+                from_number = self.pool.pick(session, lead.phone) or settings.twilio_from_number
                 call = Call(
                     lead_id=lead.id,
                     campaign_id=camp.id,
                     to_number=lead.phone,
-                    from_number=settings.twilio_from_number,
+                    from_number=from_number,
                     status=CallStatus.INITIATED,
                 )
                 session.add(call)
@@ -108,15 +113,16 @@ class DialerWorker:
                 repo.mark_calling(lead)
 
                 if self.dry_run or self.telephony is None:
-                    log.info("[dry-run] would call %s (lead %s, call %s)",
-                             lead.phone, lead.id, call.id)
+                    log.info("[dry-run] would call %s from %s (lead %s, call %s)",
+                             lead.phone, from_number, lead.id, call.id)
                     # No real call -> no status callback will complete it, so
                     # mark it done now to keep the in-flight count accurate.
                     call.status = CallStatus.COMPLETED
                 else:
                     try:
                         sid = self.telephony.place_call(
-                            to_number=lead.phone, call_id=call.id, lead_id=lead.id
+                            to_number=lead.phone, call_id=call.id, lead_id=lead.id,
+                            from_number=from_number,
                         )
                         call.provider_call_sid = sid
                     except Exception as e:  # noqa: BLE001

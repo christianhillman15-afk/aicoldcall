@@ -129,7 +129,12 @@ configured).
   `docker compose up` (API + dialer + db).
 - Replace `Base.metadata.create_all` with Alembic migrations.
 - Wire a federal DNC registry checker (`set_federal_dnc_checker`) before scale.
-- Rotate caller IDs / warm your numbers (see `docs/PLAYBOOK.md` → deliverability).
+- Set a local-presence pool (`COLDY_FROM_NUMBERS`) and register numbers for
+  STIR/SHAKEN + branded caller ID so calls get answered — see
+  `docs/DELIVERABILITY.md`. Check `coldy numbers`.
+- **Live dashboard:** with `coldy serve` running, open `/dashboard` for the
+  funnel, per-opener A/B, and recent calls (auto-refreshes). It's unauthenticated
+  — put it behind auth / a private network before exposing it.
 - Turn on recording only after configuring per-state notice
   (`COLDY_RECORD_CALLS=true`); Coldy injects a recording notice where required.
 - **Schema note:** the dev DB is created with `create_all` (no migrations). After

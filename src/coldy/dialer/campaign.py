@@ -29,6 +29,37 @@ class CampaignService:
             select(Campaign).where(Campaign.name == name)
         ).scalar_one_or_none()
 
+    def list_campaigns(self) -> list[dict]:
+        rows = self.session.execute(
+            select(Campaign).order_by(Campaign.created_at.desc())
+        ).scalars()
+        return [{"name": c.name, "status": c.status.value} for c in rows]
+
+    def recent_calls(self, campaign_id: int, limit: int = 25) -> list[dict]:
+        stmt = (
+            select(Call, Lead)
+            .join(Lead, Call.lead_id == Lead.id)
+            .where(Call.campaign_id == campaign_id)
+            .order_by(Call.started_at.desc())
+            .limit(limit)
+        )
+        out = []
+        for call, lead in self.session.execute(stmt):
+            out.append(
+                {
+                    "phone": call.to_number,
+                    "business": lead.business_name,
+                    "direction": call.direction,
+                    "status": call.status.value,
+                    "outcome": call.outcome.value,
+                    "opener": call.opener_id,
+                    "score": call.interest_score,
+                    "duration": call.duration_seconds,
+                    "started_at": call.started_at.isoformat() if call.started_at else None,
+                }
+            )
+        return out
+
     def create(self, name: str, goal: str | None = None) -> Campaign:
         camp = Campaign(name=name)
         if goal:

@@ -410,6 +410,36 @@ def call(
 
 
 @app.command()
+def numbers(
+    to: str = typer.Option("", "--to", help="Show which from-number would be picked for this destination"),
+) -> None:
+    """Show the caller-ID pool, today's usage, and local-presence selection."""
+    from .compliance.geo import area_code, normalize_e164, state_for_number
+    from .db.session import init_db, session_scope
+    from .telephony import NumberPool
+
+    init_db()
+    pool = NumberPool()
+    if not pool.numbers:
+        rprint("[yellow]No from-numbers configured.[/yellow] Set COLDY_FROM_NUMBERS "
+               "(comma-separated) or COLDY_TWILIO_FROM_NUMBER.")
+        raise typer.Exit(1)
+
+    with session_scope() as s:
+        usage = pool.usage_today(s)
+        t = Table("From number", "Area", "State", "Used today", "Cap")
+        for n in pool.numbers:
+            t.add_row(n, area_code(n) or "?", state_for_number(n) or "?",
+                      str(usage.get(n, 0)), str(settings.per_number_daily_cap))
+        rprint(t)
+        if to:
+            e164 = normalize_e164(to) or to
+            pick = pool.pick(s, e164)
+            rprint(f"\nFor [bold]{e164}[/bold] (area {area_code(e164)}, "
+                   f"{state_for_number(e164)}): would call from [green]{pick}[/green]")
+
+
+@app.command()
 def serve() -> None:
     """Run the FastAPI webhook/media server."""
     import uvicorn

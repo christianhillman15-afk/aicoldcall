@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from ..config import settings
 from ..logging import get_logger
-from .routes import health, media, twilio_webhooks
+from .routes import dashboard, health, media, twilio_webhooks
 
 log = get_logger("coldy.api")
 
@@ -17,6 +17,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(twilio_webhooks.router)
     app.include_router(media.router)
+    app.include_router(dashboard.router)
 
     @app.on_event("startup")
     async def _startup() -> None:

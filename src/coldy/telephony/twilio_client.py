@@ -26,9 +26,13 @@ class TwilioTelephony:
             password=_env("TWILIO_AUTH_TOKEN"),
         )
 
-    def place_call(self, *, to_number: str, call_id: int, lead_id: int) -> str:
+    def place_call(
+        self, *, to_number: str, call_id: int, lead_id: int, from_number: str | None = None
+    ) -> str:
         """Place an outbound call. Returns the Twilio Call SID.
 
+        - ``from_number`` overrides the caller ID (local-presence pool); defaults
+          to the single configured number.
         - ``url`` points to our webhook which returns <Connect><Stream> TwiML.
         - AMD ("Enable") detects voicemail so we don't pitch an answering machine.
         - ``status_callback`` reports ringing/answered/completed transitions.
@@ -36,10 +40,11 @@ class TwilioTelephony:
         base = settings.public_base_url.rstrip("/")
         voice_url = f"{base}/twilio/voice?call_id={call_id}&lead_id={lead_id}"
         status_url = f"{base}/twilio/status?call_id={call_id}"
+        from_num = from_number or settings.twilio_from_number
 
         kwargs = dict(
             to=to_number,
-            from_=settings.twilio_from_number,
+            from_=from_num,
             url=voice_url,
             method="POST",
             status_callback=status_url,

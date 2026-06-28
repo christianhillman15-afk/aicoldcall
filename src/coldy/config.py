@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
     transfer_number: str = ""
 
+    # --- Number pool / local presence (deliverability) ---
+    # Comma-separated E.164 pool to rotate, matched to the lead's area code so
+    # the call shows a local number. Falls back to twilio_from_number.
+    from_numbers: str = ""
+    # Per-number daily call cap to spread volume and protect number reputation.
+    per_number_daily_cap: int = 200
+
     # --- Brand / persona ---
     company_name: str = "Launch Media"
     agent_name: str = "Avery"
@@ -85,6 +92,14 @@ class Settings(BaseSettings):
     # --- CRM webhook ---
     crm_webhook_url: str = ""
     crm_webhook_secret: str = ""
+
+    @property
+    def from_number_pool(self) -> list[str]:
+        """The caller-ID pool to rotate. Falls back to the single from-number."""
+        nums = [n.strip() for n in self.from_numbers.split(",") if n.strip()]
+        if nums:
+            return nums
+        return [self.twilio_from_number] if self.twilio_from_number else []
 
     @property
     def is_sqlite(self) -> bool:

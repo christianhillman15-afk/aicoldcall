@@ -104,8 +104,9 @@ See [`docs/SETUP.md`](docs/SETUP.md) for the full walkthrough.
 | `coldy check --phone …` | Preview the compliance decision for a number |
 | `coldy persona` | Print the exact system prompt + a sample opening the bot uses |
 | `coldy openers [--industry X]` | Preview the data-backed opener library, rendered |
-| `coldy report --campaign NAME` | Campaign stats / outcomes |
-| `coldy serve` | Run the FastAPI webhook + media server |
+| `coldy report --campaign NAME` | Campaign stats / outcomes / funnel / opener A/B |
+| `coldy numbers [--to +1…]` | Show the caller-ID pool + local-presence selection |
+| `coldy serve` | Run the webhook + media server (+ live dashboard at `/dashboard`) |
 | `coldy doctor` | Verify configuration & credentials |
 
 ## Configuration
@@ -124,9 +125,14 @@ Everything is env-driven (`COLDY_*` prefix). The most important knobs:
 - `COLDY_VOICEMAIL_ENABLED`, `COLDY_SMS_ENABLED`, `COLDY_BOOKING_LINK` —
   multi-touch follow-up (voicemail drop on machine detection; consent-gated SMS).
 - `COLDY_RECORD_CALLS` — enable recording (per-state notice auto-injected).
+- `COLDY_FROM_NUMBERS`, `COLDY_PER_NUMBER_DAILY_CAP` — local-presence caller-ID
+  pool + reputation caps (see `docs/DELIVERABILITY.md`).
 
-`coldy report` shows the **funnel** (dials → connected → conversations →
-meetings) and a **per-opener A/B table** so you can see which opener books most.
+`coldy report` (and the **live dashboard** at `/dashboard` while `coldy serve`
+runs) show the **funnel** (dials → connected → conversations → meetings) and a
+**per-opener A/B table** so you can see which opener books most. Getting calls
+answered at all is covered in [`docs/DELIVERABILITY.md`](docs/DELIVERABILITY.md)
+(local presence, STIR/SHAKEN, number reputation).
 
 Full list in `.env.example`.
 
